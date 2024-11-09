@@ -1,15 +1,18 @@
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, QueryCommand, PutCommand, DeleteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDB } from '@aws-sdk/client-dynamodb'
+import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb'
+import { QueryCommand, PutCommand, DeleteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { createLogger } from '../utils/logger.mjs';
+import AWSXRay from 'aws-xray-sdk-core'
 
 const logger = createLogger('todoAccess');
-const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({ region: "us-east-1" }));
+const dynamoDb = AWSXRay.captureAWSv3Client(new DynamoDB())
+const dynamoDbClient = DynamoDBDocument.from(dynamoDb)
 const todosTable = process.env.TODOS_TABLE;
 
 const sendCommand = async (command, actionDescription) => {
     try {
         logger.info(actionDescription);
-        const result = await docClient.send(command);
+        const result = await dynamoDbClient.send(command);
         return result;
     } catch (error) {
         logger.error(`Failed to ${actionDescription.toLowerCase()}`, { error });
