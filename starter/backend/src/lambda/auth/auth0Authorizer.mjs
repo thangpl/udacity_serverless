@@ -1,10 +1,10 @@
-import Axios from 'axios'
+import axios from 'axios'
 import jsonwebtoken from 'jsonwebtoken'
 import { createLogger } from '../../utils/logger.mjs'
 
 const logger = createLogger('auth')
 
-const jwksUrl = 'https://test-endpoint.auth0.com/.well-known/jwks.json'
+const jwksUrl = 'https://dev-4rzdc21qohb01vge.us.auth0.com/.well-known/jwks.json'
 
 export async function handler(event) {
   try {
@@ -43,11 +43,36 @@ export async function handler(event) {
 }
 
 async function verifyToken(authHeader) {
-  const token = getToken(authHeader)
-  const jwt = jsonwebtoken.decode(token, { complete: true })
+  const token = getToken(authHeader);
+  const decodedJwt = jsonwebtoken.decode(token, { complete: true });
 
-  // TODO: Implement token verification
-  return undefined;
+  if (!decodedJwt || !decodedJwt.header) {
+    throw new Error('Invalid token');
+  }
+
+  try {
+    const cert = await getSigningCertificate(decodedJwt.header.kid);
+    return jsonwebtoken.verify(token, cert, { algorithms: ['RS256'] });
+  } catch (error) {
+    logger.error('Token verification failed', { error });
+    return undefined;
+  }
+}
+
+async function getSigningCertificate(kid) {
+  try {
+    const { data: { keys = [] } = {} } = await axios.get(jwksUrl);
+    const key = keys.find((k) => k.kid === kid);
+
+    if (!key || !key.x5c || key.x5c.length === 0) {
+      throw new Error('Signing key not found');
+    }
+
+    const pem = key.x5c[0];
+    return `-----BEGIN CERTIFICATE-----\n${pem}\n-----END CERTIFICATE-----`;
+  } catch (error) {
+    throw new Error(`Failed to retrieve signing certificate: ${error.message}`);
+  }
 }
 
 function getToken(authHeader) {
